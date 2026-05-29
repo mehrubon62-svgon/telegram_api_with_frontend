@@ -1,0 +1,378 @@
+"""
+HTTP API модуля users.
+
+Сюда вынесено всё, что должно работать ДО установки WebSocket-соединения
+или то, что не требует real-time:
+  • регистрация / логин / refresh / logout
+  • профиль (me / update / change-password)
+  • активные сессии (как «Активные сеансы» в Telegram)
+  • 2FA (облачный пароль)
+  • настройки приватности
+  • поиск и публичный профиль пользователя
+"""
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from sqlalchemy.orm import Session
+
+from models import get_db, User
+from dependencies import (
+    create_access_token,
+    get_current_user,
+    get_request_meta,
+)
+from modules.users.schemas import (
+    UserRegister,
+    UserLogin,
+    Token,
+    RefreshRequest,
+    PasswordChange,
+    UserMe,
+    UserPublic,
+    UserUpdate,
+    SessionOut,
+    PrivacyOut,
+    PrivacyUpdate,
+    TwoFactorEnable,
+    TwoFactorVerify,
+    UsernameHistoryOut,
+)
+from modules.users.crud import (
+    get_user_by_id,
+    get_user_by_email,
+    get_user_by_username,
+    get_user_by_phone,
+    get_user_by_identifier,
+    search_users,
+    create_user,
+    update_user,
+    change_password,
+    verify_password,
+    get_username_history,
+    create_session,
+    get_session_by_token,
+    list_user_sessions,
+    revoke_session,
+    revoke_session_by_id,
+    revoke_all_user_sessions,
+    touch_session,
+    record_login_attempt,
+    get_2fa,
+    enable_2fa,
+    disable_2fa,
+    verify_2fa,
+    get_privacy,
+    update_privacy,
+)
+
+
+router = APIRouter(prefix="/users", tags=["Users"])
+
+
+# =====================================================================
+#  Auth
+# =====================================================================
+
+@router.post("/register", response_model=Token, status_code=201)
+def register(data: UserRegister, request: Request, db: Session = Depends(get_db)):
+    """Регистрация. Сразу возвращает access + refresh токены."""
+    if get_user_by_email(db, data.email):
+        raise HTTPException(status_code=400, detail="Email already registered")
+    if data.username and get_user_by_username(db, data.username):
+        raise HTTPException(status_code=400, detail="Username already taken")
+    if data.phone and get_user_by_phone(db, data.phone):
+        raise HTTPException(status_code=400, detail="Phone already registered")
+
+    user = create_user(
+        db,
+        email=data.email,
+        password=data.password,
+        username=data.username,
+        full_name=data.full_name,
+        phone=data.phone,
+    )
+
+    meta = get_request_meta(request)
+    session = create_session(
+        db,
+        user.id,
+        ip_address=meta["ip_address"],
+        user_agent=meta["user_agent"],
+    )
+    return Token(
+        access_token=create_access_token({"sub": str(user.id), "sid": session.id}),
+        refresh_token=session.refresh_token,
+    )
+
+
+@router.post("/login", response_model=Token)
+def login(data: UserLogin, request: Request, db: Session = Depends(get_db)):
+    """Логин по email / username / phone."""
+    meta = get_request_meta(request)
+    user = get_user_by_identifier(db, data.identifier)
+
+    if not user or not verify_password(data.password, user.hashed_password):
+        record_login_attempt(
+            db,
+            identifier=data.identifier,
+            success=False,
+            user_id=user.id if user else None,
+            **meta,
+        )
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="User is inactive")
+
+    record_login_attempt(db, identifier=data.identifier, success=True, user_id=user.id, **meta)
+
+    # Если включена 2FA — на этом этапе вернём специальную ошибку, чтобы клиент
+    # запросил облачный пароль через /2fa/verify-login (упрощённая схема).
+    if get_2fa(db, user.id):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="2FA_REQUIRED",
+            headers={"X-2FA": "required"},
+        )
+
+    session = create_session(
+        db,
+        user.id,
+        platform=data.platform,
+        device_name=data.device_name,
+        ip_address=meta["ip_address"],
+        user_agent=meta["user_agent"],
+    )
+    return Token(
+        access_token=create_access_token({"sub": str(user.id), "sid": session.id}),
+        refresh_token=session.refresh_token,
+    )
+
+
+@router.post("/2fa/verify-login", response_model=Token)
+def verify_login_with_2fa(
+    data: UserLogin,
+    code: TwoFactorVerify,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """
+    Завершение логина для пользователей с включённой 2FA.
+    Сначала проверяется обычный пароль, затем облачный.
+    """
+    user = get_user_by_identifier(db, data.identifier)
+    if not user or not verify_password(data.password, user.hashed_password):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    if not verify_2fa(db, user.id, code.password):
+        raise HTTPException(status_code=401, detail="Invalid 2FA password")
+
+    meta = get_request_meta(request)
+    session = create_session(
+        db,
+        user.id,
+        platform=data.platform,
+        device_name=data.device_name,
+        ip_address=meta["ip_address"],
+        user_agent=meta["user_agent"],
+    )
+    return Token(
+        access_token=create_access_token({"sub": str(user.id), "sid": session.id}),
+        refresh_token=session.refresh_token,
+    )
+
+
+@router.post("/refresh", response_model=Token)
+def refresh_token(payload: RefreshRequest, db: Session = Depends(get_db)):
+    session = get_session_by_token(db, payload.refresh_token)
+    if not session or session.revoked:
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
+
+    expires_at = session.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at < datetime.now(timezone.utc):
+        raise HTTPException(status_code=401, detail="Refresh token expired")
+
+    user = get_user_by_id(db, session.user_id)
+    if not user or not user.is_active:
+        raise HTTPException(status_code=401, detail="User not found or inactive")
+
+    touch_session(db, session)
+    return Token(
+        access_token=create_access_token({"sub": str(user.id), "sid": session.id}),
+        refresh_token=session.refresh_token,
+    )
+
+
+@router.post("/logout")
+def logout(payload: RefreshRequest, db: Session = Depends(get_db), _user: User = Depends(get_current_user)):
+    revoke_session(db, payload.refresh_token)
+    return {"detail": "Logged out"}
+
+
+@router.post("/logout-all")
+def logout_all(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    count = revoke_all_user_sessions(db, user.id)
+    return {"detail": f"Revoked {count} sessions"}
+
+
+# =====================================================================
+#  Me / Profile
+# =====================================================================
+
+@router.get("/me", response_model=UserMe)
+def get_me(user: User = Depends(get_current_user)):
+    return user
+
+
+@router.put("/me", response_model=UserMe)
+def edit_me(
+    data: UserUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    fields = data.model_dump(exclude_unset=True)
+
+    if "username" in fields and fields["username"]:
+        existing = get_user_by_username(db, fields["username"])
+        if existing and existing.id != user.id:
+            raise HTTPException(status_code=400, detail="Username already taken")
+
+    if "phone" in fields and fields["phone"]:
+        existing = get_user_by_phone(db, fields["phone"])
+        if existing and existing.id != user.id:
+            raise HTTPException(status_code=400, detail="Phone already in use")
+
+    return update_user(db, user, **fields)
+
+
+@router.post("/me/change-password")
+def change_my_password(
+    data: PasswordChange,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    if not verify_password(data.old_password, user.hashed_password):
+        raise HTTPException(status_code=400, detail="Old password is incorrect")
+    change_password(db, user, data.new_password)
+    revoke_all_user_sessions(db, user.id)
+    return {"detail": "Password changed. Please log in again."}
+
+
+@router.get("/me/username-history", response_model=list[UsernameHistoryOut])
+def my_username_history(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    return get_username_history(db, user.id)
+
+
+# =====================================================================
+#  Sessions
+# =====================================================================
+
+@router.get("/me/sessions", response_model=list[SessionOut])
+def list_sessions(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    return list_user_sessions(db, user.id)
+
+
+@router.delete("/me/sessions/{session_id}")
+def terminate_session(
+    session_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    if not revoke_session_by_id(db, user.id, session_id):
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {"detail": "Session terminated"}
+
+
+# =====================================================================
+#  Privacy
+# =====================================================================
+
+@router.get("/me/privacy", response_model=PrivacyOut)
+def my_privacy(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    return get_privacy(db, user.id)
+
+
+@router.put("/me/privacy", response_model=PrivacyOut)
+def edit_privacy(
+    data: PrivacyUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    return update_privacy(db, user.id, **data.model_dump(exclude_unset=True))
+
+
+# =====================================================================
+#  2FA
+# =====================================================================
+
+@router.post("/me/2fa/enable")
+def enable_my_2fa(
+    data: TwoFactorEnable,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    enable_2fa(db, user.id, data.password, data.hint, data.recovery_email)
+    return {"detail": "2FA enabled"}
+
+
+@router.post("/me/2fa/disable")
+def disable_my_2fa(
+    data: TwoFactorVerify,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    if not verify_2fa(db, user.id, data.password):
+        raise HTTPException(status_code=400, detail="Invalid 2FA password")
+    disable_2fa(db, user.id)
+    return {"detail": "2FA disabled"}
+
+
+@router.get("/me/2fa")
+def my_2fa_status(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    record = get_2fa(db, user.id)
+    if not record:
+        return {"enabled": False}
+    return {
+        "enabled": True,
+        "hint": record.hint,
+        "recovery_email": record.recovery_email,
+        "enabled_at": record.enabled_at,
+    }
+
+
+# =====================================================================
+#  Public lookup
+# =====================================================================
+
+@router.get("/search", response_model=list[UserPublic])
+def search(
+    q: str = Query(..., min_length=1, max_length=50),
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    return search_users(db, q)
+
+
+@router.get("/by-username/{username}", response_model=UserPublic)
+def get_by_username(
+    username: str,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    user = get_user_by_username(db, username)
+    if not user or not user.is_active:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
+
+
+@router.get("/{user_id}", response_model=UserPublic)
+def get_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    user = get_user_by_id(db, user_id)
+    if not user or not user.is_active:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
