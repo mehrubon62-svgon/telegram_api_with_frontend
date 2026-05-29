@@ -38,7 +38,7 @@ export const authApi = {
   logout: (refresh_token: string) => api.post('/users/logout', { refresh_token }).then((r) => r.data),
   logoutAll: () => api.post('/users/logout-all').then((r) => r.data),
   me: () => api.get<UserMe>('/users/me').then((r) => r.data),
-  updateMe: (body: Partial<Pick<UserMe, 'username' | 'full_name' | 'bio' | 'avatar_url' | 'phone' | 'language_code' | 'theme'> & { name_color: number }>) =>
+  updateMe: (body: Partial<Pick<UserMe, 'username' | 'full_name' | 'bio' | 'avatar_url' | 'phone' | 'language_code' | 'theme'> & { name_color: number; birthday: string }>) =>
     api.put<UserMe>('/users/me', body).then((r) => r.data),
   changePassword: (body: { old_password: string; new_password: string }) =>
     api.post('/users/me/change-password', body).then((r) => r.data),

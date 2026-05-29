@@ -17,6 +17,16 @@ class ChatPermissions(BaseModel):
     can_change_info: bool = False
 
 
+class ChatPeer(BaseModel):
+    """Собеседник в private-чате — чтобы показывать его имя/аватар."""
+    id: int
+    username: str | None = None
+    full_name: str | None = None
+    avatar_url: str | None = None
+    is_online: bool = False
+    last_seen: datetime | None = None
+
+
 class ChatOut(BaseModel):
     id: int
     type: ChatType
@@ -25,6 +35,7 @@ class ChatOut(BaseModel):
     avatar_url: str | None = None
     public_username: str | None = None
     creator_id: int | None = None
+    peer: ChatPeer | None = None
     pinned_message_id: int | None = None
     last_message_id: int | None = None
     linked_chat_id: int | None = None

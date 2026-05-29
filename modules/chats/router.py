@@ -70,7 +70,27 @@ router = APIRouter(prefix="/chats", tags=["Chats"])
 #  Helpers
 # =====================================================================
 
-def _serialize_chat(chat: Chat) -> ChatOut:
+def _serialize_chat(chat: Chat, db: Session | None = None, viewer_id: int | None = None) -> ChatOut:
+    peer = None
+    if chat.type == ChatType.private and db is not None and viewer_id is not None:
+        other = (
+            db.query(ChatMember)
+            .filter(ChatMember.chat_id == chat.id, ChatMember.user_id != viewer_id)
+            .first()
+        )
+        if other:
+            from models import ChatPeer as _P  # noqa
+            u = get_user_by_id(db, other.user_id)
+            if u:
+                from modules.chats.schemas import ChatPeer
+                peer = ChatPeer(
+                    id=u.id,
+                    username=u.username,
+                    full_name=u.full_name,
+                    avatar_url=u.avatar_url,
+                    is_online=u.is_online,
+                    last_seen=u.last_seen,
+                )
     return ChatOut(
         id=chat.id,
         type=chat.type,
@@ -79,6 +99,7 @@ def _serialize_chat(chat: Chat) -> ChatOut:
         avatar_url=chat.avatar_url,
         public_username=chat.public_username,
         creator_id=chat.creator_id,
+        peer=peer,
         pinned_message_id=chat.pinned_message_id,
         last_message_id=chat.last_message_id,
         linked_chat_id=chat.linked_chat_id,
@@ -283,7 +304,7 @@ def my_chats(
                 "is_deleted": bool(m.is_deleted),
             }
         result.append(ChatListItem(
-            chat=_serialize_chat(chat),
+            chat=_serialize_chat(chat, db, user.id),
             is_pinned=member.is_pinned,
             is_archived=member.is_archived,
             is_muted=member.is_muted,
@@ -322,7 +343,7 @@ def get_chat(
     chat = _get_chat_or_404(db, chat_id)
     if chat.type not in (ChatType.channel,) or not chat.public_username:
         _ensure_member(chat_id, user.id, db)
-    return _serialize_chat(chat)
+    return _serialize_chat(chat, db, user.id)
 
 
 @router.put("/{chat_id}", response_model=ChatOut)

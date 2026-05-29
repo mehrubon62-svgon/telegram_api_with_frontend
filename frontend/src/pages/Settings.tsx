@@ -1,6 +1,6 @@
 import { ArrowLeft, LogOut, Moon, Sun, Monitor } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { useAuthStore } from '@/store/auth';
 import { useUiStore } from '@/store/ui';
 import { Button } from '@/components/ui/Button';
@@ -87,6 +87,7 @@ export function Settings() {
           <Row label="Username" value={me?.username ? `${me.username}` : 'Not set'} />
           <Row label="Phone" value={me?.phone ?? 'Not set'} />
           <Row label="Bio" value={me?.bio ?? 'Not set'} />
+          <BirthdayRow />
         </Section>
 
         <Section title="Name color">
@@ -150,6 +151,65 @@ function Row({ label, value }: { label: string; value: string }) {
     <div className="flex items-center justify-between border-b border-line px-4 py-3 last:border-b-0">
       <span className="text-sm text-muted">{label}</span>
       <span className="text-sm">{value}</span>
+    </div>
+  );
+}
+
+function BirthdayRow() {
+  const me = useAuthStore((s) => s.me);
+  const setMe = useAuthStore((s) => s.setMe);
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState('');
+
+  if (me?.birthday) {
+    const d = new Date(me.birthday);
+    return (
+      <div className="flex items-center justify-between border-b border-line px-4 py-3 last:border-b-0">
+        <span className="text-sm text-muted">Date of birth</span>
+        <span className="text-sm">{d.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+      </div>
+    );
+  }
+
+  if (!editing) {
+    return (
+      <button
+        onClick={() => setEditing(true)}
+        className="flex w-full items-center justify-between border-b border-line px-4 py-3 text-left last:border-b-0 hover:bg-bg2"
+      >
+        <span className="text-sm text-muted">Date of birth</span>
+        <span className="text-sm text-accent">Set</span>
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2 border-b border-line px-4 py-3 last:border-b-0">
+      <span className="text-sm text-muted">Date of birth</span>
+      <input
+        type="date"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        className="ml-auto rounded-md bg-bg2 px-2 py-1 text-sm outline-none"
+      />
+      <button
+        disabled={!value}
+        onClick={async () => {
+          try {
+            const iso = new Date(value + 'T00:00:00Z').toISOString();
+            const updated = await authApi.updateMe({ birthday: iso });
+            setMe(updated);
+            toast.success('Birthday set (cannot be changed later)');
+            setEditing(false);
+          } catch (err) {
+            const msg = (err as { response?: { data?: { detail?: string } } }).response?.data?.detail;
+            toast.error(msg ?? 'Failed');
+          }
+        }}
+        className="rounded-md bg-accent px-3 py-1 text-sm text-white disabled:opacity-50"
+      >
+        Save
+      </button>
     </div>
   );
 }

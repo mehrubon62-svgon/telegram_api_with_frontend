@@ -16,6 +16,8 @@ import { useAuthStore } from '@/store/auth';
 import { ChatHeaderMenu } from './ChatHeaderMenu';
 import { ChatSearchBar } from './ChatSearchBar';
 import { ChatProfilePanel } from './ChatProfilePanel';
+import { chatAvatar, chatAvatarId, chatDisplayName } from '@/lib/chat';
+import { formatLastSeen } from '@/lib/format';
 
 interface Props {
   chatId: number;
@@ -64,6 +66,9 @@ export function ChatView({ chatId }: Props) {
       return `${chat.members_count} members`;
     }
     if (chat.type === 'saved') return 'your private notes';
+    if (chat.type === 'private' && chat.peer) {
+      return chat.peer.is_online ? 'online' : formatLastSeen(chat.peer.last_seen);
+    }
     return 'last seen recently';
   })();
 
@@ -99,16 +104,15 @@ export function ChatView({ chatId }: Props) {
             className="flex min-w-0 flex-1 items-center gap-3 rounded-md p-1 text-left transition-colors hover:bg-bg2"
           >
             <Avatar
-              src={chat.avatar_url}
-              name={chat.title ?? chat.public_username ?? `Chat ${chat.id}`}
-              id={chat.id}
+              src={chatAvatar(chat)}
+              name={chatDisplayName(chat)}
+              id={chatAvatarId(chat)}
               size={40}
+              online={chat.peer?.is_online ?? false}
             />
             <div className="min-w-0">
               <div className="truncate font-medium">
-                {chat.type === 'saved'
-                  ? 'Saved Messages'
-                  : chat.title ?? chat.public_username ?? `Chat ${chat.id}`}
+                {chatDisplayName(chat)}
               </div>
               <div className="truncate text-xs text-muted">
                 <TypingIndicator chatId={chatId} fallback={subtitleByType} />

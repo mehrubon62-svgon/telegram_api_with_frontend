@@ -20,22 +20,31 @@ export function StoriesBar() {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const [editor, setEditor] = useState(false);
 
-  // Подписка на WS: когда кто-то смотрит мой сторис — апдейтим счётчик
+  // Подписка на WS: views счётчик + изменение контактов
   useEffect(() => {
     const unsub = wsClient.subscribe((event) => {
-      if (event.type !== 'story_viewed') return;
-      const sid = event.story_id as number;
-      const views = event.views_count as number;
-      queryClient.setQueryData<StoryFeedItem[]>(['stories', 'feed'], (old) => {
-        if (!old) return old;
-        return old.map((item) => {
-          const idx = item.stories.findIndex((s) => s.id === sid);
-          if (idx === -1) return item;
-          const stories = item.stories.slice();
-          stories[idx] = { ...stories[idx]!, views_count: views };
-          return { ...item, stories };
+      if (event.type === 'story_viewed') {
+        const sid = event.story_id as number;
+        const views = event.views_count as number;
+        queryClient.setQueryData<StoryFeedItem[]>(['stories', 'feed'], (old) => {
+          if (!old) return old;
+          return old.map((item) => {
+            const idx = item.stories.findIndex((s) => s.id === sid);
+            if (idx === -1) return item;
+            const stories = item.stories.slice();
+            stories[idx] = { ...stories[idx]!, views_count: views };
+            return { ...item, stories };
+          });
         });
-      });
+      }
+      if (event.type === 'contact_changed') {
+        // Контакт добавлен/удалён — лента сторис зависит от контактов
+        queryClient.invalidateQueries({ queryKey: ['stories', 'feed'] });
+        const cid = event.contact_id as number | undefined;
+        if (cid) {
+          queryClient.invalidateQueries({ queryKey: ['user-profile', cid] });
+        }
+      }
     });
     return unsub;
   }, [queryClient]);

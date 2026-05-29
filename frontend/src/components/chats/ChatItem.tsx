@@ -5,6 +5,7 @@ import { cn } from '@/lib/cn';
 import { formatChatListTime } from '@/lib/format';
 import { useAuthStore } from '@/store/auth';
 import { usePresenceStore } from '@/store/presence';
+import { chatAvatar, chatAvatarId, chatDisplayName } from '@/lib/chat';
 
 interface Props {
   item: ChatListItem;
@@ -26,10 +27,7 @@ export function ChatItem({ item, active, onClick }: Props) {
     return n;
   })();
 
-  const title =
-    chat.type === 'saved'
-      ? 'Saved Messages'
-      : chat.title ?? chat.public_username ?? `Chat ${chat.id}`;
+  const title = chatDisplayName(chat);
 
   const isOwnLast = last_message?.sender_id === me?.id;
   const isGroupLike = chat.type === 'group' || chat.type === 'supergroup';
@@ -71,7 +69,7 @@ export function ChatItem({ item, active, onClick }: Props) {
         active ? 'bg-accent/15' : 'hover:bg-bg2',
       )}
     >
-      <Avatar src={chat.avatar_url} name={title} id={chat.id} size={50} />
+      <Avatar src={chatAvatar(chat)} name={title} id={chatAvatarId(chat)} size={50} online={chat.peer?.is_online ?? false} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-1">

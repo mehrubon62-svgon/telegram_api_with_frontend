@@ -7,6 +7,7 @@ from dependencies import get_current_user
 from modules.users.crud import get_user_by_id
 
 from modules.contacts import crud
+from modules.websockets.events import send_to_user_sync
 from modules.contacts.schemas import (
     ContactCreate,
     ContactImportRequest,
@@ -62,6 +63,10 @@ def add_my_contact(
     )
     db.commit()
     db.refresh(contact)
+    send_to_user_sync(user.id, 'contact_changed', {
+        'contact_id': data.user_id,
+        'is_contact': True,
+    })
     return _serialize(contact, target)
 
 
@@ -96,6 +101,10 @@ def remove_my_contact(
     if not crud.remove_contact(db, user.id, contact_user_id):
         raise HTTPException(status_code=404, detail="Contact not found")
     db.commit()
+    send_to_user_sync(user.id, 'contact_changed', {
+        'contact_id': contact_user_id,
+        'is_contact': False,
+    })
     return {"detail": "Removed"}
 
 
@@ -127,4 +136,6 @@ def import_contacts(
     db.commit()
     for c, _ in result:
         db.refresh(c)
+    if result:
+        send_to_user_sync(user.id, 'contact_changed', {'bulk': True, 'is_contact': True})
     return [_serialize(c, u) for c, u in result]

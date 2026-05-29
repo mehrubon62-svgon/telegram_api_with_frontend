@@ -105,6 +105,15 @@ export interface ChatPermissions {
   can_change_info: boolean;
 }
 
+export interface ChatPeer {
+  id: number;
+  username: string | null;
+  full_name: string | null;
+  avatar_url: string | null;
+  is_online: boolean;
+  last_seen: string | null;
+}
+
 export interface ChatOut {
   id: number;
   type: ChatType;
@@ -113,6 +122,7 @@ export interface ChatOut {
   avatar_url: string | null;
   public_username: string | null;
   creator_id: number | null;
+  peer: ChatPeer | null;
   pinned_message_id: number | null;
   last_message_id: number | null;
   linked_chat_id: number | null;

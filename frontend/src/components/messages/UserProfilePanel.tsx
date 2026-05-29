@@ -1,4 +1,4 @@
-import { X, Phone, Video, MessageCircle, MoreHorizontal, Copy, UserPlus, UserMinus, Ban, Cake } from 'lucide-react';
+import { X, Phone, Video, MessageCircle, Copy, UserPlus, UserMinus, Ban, Cake } from 'lucide-react';
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
@@ -251,6 +251,3 @@ function TabButton({ active, label, onClick }: { active: boolean; label: string;
     </button>
   );
 }
-
-// Подавляем неиспользуемый импорт MoreHorizontal — оставлен для возможного More-меню
-void MoreHorizontal;
