@@ -1,14 +1,17 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { storiesApi } from '@/api/endpoints';
 import { Avatar } from '@/components/ui/Avatar';
 import { useAuthStore } from '@/store/auth';
 import { StoryViewer } from './StoryViewer';
 import { StoryEditor } from './StoryEditor';
+import { wsClient } from '@/ws/client';
+import type { StoryFeedItem } from '@/api/types';
 
 export function StoriesBar() {
   const me = useAuthStore((s) => s.me);
+  const queryClient = useQueryClient();
   const { data } = useQuery({
     queryKey: ['stories', 'feed'],
     queryFn: () => storiesApi.feed(),
@@ -16,6 +19,26 @@ export function StoriesBar() {
   });
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const [editor, setEditor] = useState(false);
+
+  // Подписка на WS: когда кто-то смотрит мой сторис — апдейтим счётчик
+  useEffect(() => {
+    const unsub = wsClient.subscribe((event) => {
+      if (event.type !== 'story_viewed') return;
+      const sid = event.story_id as number;
+      const views = event.views_count as number;
+      queryClient.setQueryData<StoryFeedItem[]>(['stories', 'feed'], (old) => {
+        if (!old) return old;
+        return old.map((item) => {
+          const idx = item.stories.findIndex((s) => s.id === sid);
+          if (idx === -1) return item;
+          const stories = item.stories.slice();
+          stories[idx] = { ...stories[idx]!, views_count: views };
+          return { ...item, stories };
+        });
+      });
+    });
+    return unsub;
+  }, [queryClient]);
 
   const items = data ?? [];
 
@@ -27,21 +50,14 @@ export function StoriesBar() {
   return (
     <>
       <div className="thin-scrollbar flex gap-3 overflow-x-auto border-b border-line bg-bg px-3 py-3">
-        {/* Свой круг + плюс */}
+        {/* Свой круг — кнопка добавления, без сине-градиентного ободка */}
         <button
           type="button"
           onClick={() => setEditor(true)}
           className="flex w-16 shrink-0 flex-col items-center gap-1"
         >
           <span className="relative">
-            <span
-              className={
-                'flex h-16 w-16 items-center justify-center rounded-full p-[2px] transition-transform active:scale-95 ' +
-                (myItem?.has_unviewed
-                  ? 'bg-gradient-to-tr from-accent via-accentHover to-accent'
-                  : 'bg-line')
-              }
-            >
+            <span className="flex h-16 w-16 items-center justify-center rounded-full bg-line p-[2px] transition-transform active:scale-95">
               <span className="flex h-full w-full items-center justify-center rounded-full bg-bg p-[2px]">
                 <Avatar
                   src={me?.avatar_url ?? null}

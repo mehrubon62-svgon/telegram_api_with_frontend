@@ -179,6 +179,10 @@ export const storiesApi = {
   unreact: (id: number) => api.delete<StoryOut>(`/stories/${id}/reaction`).then((r) => r.data),
   reply: (id: number, text: string) =>
     api.post<{ chat_id: number; message_id: number }>(`/stories/${id}/reply`, { text }).then((r) => r.data),
+  byUser: (userId: number) =>
+    api.get<StoryOut[]>(`/users/${userId}/stories`).then((r) => r.data),
+  pinnedByUser: (userId: number) =>
+    api.get<StoryOut[]>(`/users/${userId}/stories/pinned`).then((r) => r.data),
 };
 
 // ---- Calls ----

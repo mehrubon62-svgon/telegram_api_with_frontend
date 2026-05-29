@@ -66,6 +66,20 @@ export function ChatList() {
       if (event.type === 'stop_typing') {
         usePresenceStore.getState().clearTyping(event.chat_id as number, event.user_id as number);
       }
+      if (event.type === 'chat_state') {
+        const cid = event.chat_id as number;
+        queryClient.setQueryData<ChatListItem[]>(['chats'], (old) => {
+          if (!old) return old;
+          return old.map((c) => {
+            if (c.chat.id !== cid) return c;
+            const next = { ...c };
+            if (typeof event.is_muted === 'boolean') next.is_muted = event.is_muted;
+            if (typeof event.is_pinned === 'boolean') next.is_pinned = event.is_pinned;
+            if (typeof event.is_archived === 'boolean') next.is_archived = event.is_archived;
+            return next;
+          });
+        });
+      }
     });
     return unsub;
   }, [queryClient, activeId]);

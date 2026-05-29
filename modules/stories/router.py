@@ -72,7 +72,7 @@ user_stories_router = APIRouter(prefix="/users", tags=["Stories"])
 def _serialize_story(db: Session, story: Story, user: User, *, author: User | None = None) -> StoryOut:
     if author is None:
         author = get_user_by_id(db, story.author_id)
-    is_viewed = crud.has_viewed(db, story.id, user.id) if user.id != story.author_id else True
+    is_viewed = crud.has_viewed(db, story.id, user.id)
     my_reaction = crud.get_my_reaction(db, story.id, user.id)
     return StoryOut(
         id=story.id,
@@ -247,9 +247,20 @@ def get_story_endpoint(
     if not crud.can_view_story(db, story, user.id):
         raise HTTPException(status_code=403, detail="Not allowed to view")
 
-    if user.id != story.author_id:
+    if user.id == story.author_id:
+        # автор: помечаем как viewed без счётчика и без пуша
+        if not crud.has_viewed(db, story.id, user.id):
+            from models import StoryView
+            db.add(StoryView(story_id=story.id, user_id=user.id))
+            db.commit()
+    else:
         if crud.record_view(db, story, user.id):
             db.commit()
+            send_to_user_sync(story.author_id, 'story_viewed', {
+                'story_id': story.id,
+                'user_id': user.id,
+                'views_count': (story.views_count or 0),
+            })
     db.refresh(story)
     return _serialize_story(db, story, user)
 
@@ -266,9 +277,19 @@ def mark_story_viewed(
     if not crud.can_view_story(db, story, user.id):
         raise HTTPException(status_code=403, detail="Not allowed to view")
 
-    if user.id != story.author_id:
-        crud.record_view(db, story, user.id)
-        db.commit()
+    if user.id == story.author_id:
+        if not crud.has_viewed(db, story.id, user.id):
+            from models import StoryView
+            db.add(StoryView(story_id=story.id, user_id=user.id))
+            db.commit()
+    else:
+        if crud.record_view(db, story, user.id):
+            db.commit()
+            send_to_user_sync(story.author_id, 'story_viewed', {
+                'story_id': story.id,
+                'user_id': user.id,
+                'views_count': (story.views_count or 0),
+            })
         db.refresh(story)
     return _serialize_story(db, story, user)
 
@@ -286,6 +307,8 @@ def story_viewers(
         raise HTTPException(status_code=403, detail="Only author can see viewers")
 
     rows = crud.list_viewers(db, story_id)
+    # автор сам не отображается в списке зрителей
+    rows = [(v, u) for v, u in rows if u.id != story.author_id]
     # реакции зрителей подмешиваем
     reactions = {
         r.user_id: r.emoji

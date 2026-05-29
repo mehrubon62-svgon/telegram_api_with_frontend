@@ -19,9 +19,10 @@ interface Props {
   message: MessageOut;
   grouped: boolean;
   chatType: ChatType;
+  canPin: boolean;
 }
 
-export function MessageBubble({ message, grouped, chatType }: Props) {
+export function MessageBubble({ message, grouped, chatType, canPin }: Props) {
   const me = useAuthStore((s) => s.me);
   const isOwn = me?.id === message.sender?.id;
   const setReply = useComposerStore((s) => s.setReply);
@@ -68,7 +69,6 @@ export function MessageBubble({ message, grouped, chatType }: Props) {
   const att = message.attachments[0];
   const isVoice = message.type === 'voice' || (att?.mime_type?.startsWith('audio/') ?? false);
   const isVideoNote = message.type === 'video_note';
-  const hasOnlyText = !isVoice && !isVideoNote && message.attachments.length === 0;
 
   // Анимация только для свежих сообщений (последние 3 сек), чтобы при
   // первой загрузке истории всё не «прыгало»
@@ -113,9 +113,8 @@ export function MessageBubble({ message, grouped, chatType }: Props) {
           onTouchEnd={onTouchEnd}
           onTouchMove={onTouchEnd}
           className={cn(
-            // увеличенные размеры; на десктопе bubble занимает до 65% ширины колонки чата,
-            // на мобиле 80%, но текст всегда переносится
-            'relative max-w-[80%] rounded-2xl px-3 py-2 text-[15px] leading-[1.35] shadow-sm sm:max-w-[65%]',
+            // ширина по содержимому, но не шире ~48 символов; затем перенос
+            'relative w-fit max-w-[min(85%,48ch)] rounded-2xl px-3 py-2 text-[15px] leading-[1.35] shadow-sm sm:max-w-[min(65%,48ch)]',
             isOwn ? 'bg-own text-ownText' : 'bg-bg text-text',
             isOwn
               ? grouped
@@ -124,12 +123,10 @@ export function MessageBubble({ message, grouped, chatType }: Props) {
               : grouped
                 ? 'rounded-bl-2xl'
                 : 'rounded-bl-md',
-            // КЛЮЧЕВОЕ: длинный текст без пробелов рвётся, обычный — переносится по словам
             'min-w-0 whitespace-pre-wrap break-words',
             '[overflow-wrap:anywhere]',
             'cursor-pointer select-text',
           )}
-          style={hasOnlyText ? { width: 'fit-content' } : undefined}
         >
           {showName && message.sender && (
             <div
@@ -298,7 +295,7 @@ export function MessageBubble({ message, grouped, chatType }: Props) {
               // ignore
             }
           }}
-          canPin={chatType === 'group' || chatType === 'supergroup' || chatType === 'channel'}
+          canPin={canPin}
         />
       )}
     </div>

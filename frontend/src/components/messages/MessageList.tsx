@@ -1,12 +1,14 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
-import { messagesApi } from '@/api/endpoints';
+import { chatsApi, messagesApi } from '@/api/endpoints';
 import type { MessageOut } from '@/api/types';
 import { wsClient } from '@/ws/client';
 import { Spinner } from '@/components/ui/Spinner';
 import { MessageBubble } from './MessageBubble';
 import { DaySeparator } from './DaySeparator';
 import { isSameDay } from 'date-fns';
+import { ChannelPost } from './ChannelPost';
+import { useAuthStore } from '@/store/auth';
 
 interface Props {
   chatId: number;
@@ -17,11 +19,24 @@ export function MessageList({ chatId, chatType }: Props) {
   const queryClient = useQueryClient();
   const containerRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
+  const meId = useAuthStore((s) => s.me?.id);
 
   const { data, isLoading } = useQuery({
     queryKey: ['chat', chatId, 'messages'],
     queryFn: () => messagesApi.history(chatId, { limit: 80 }),
   });
+
+  // Кто я в этом чате — для прав на pin (только creator/admin в группах/каналах)
+  const isGroupLike = chatType === 'group' || chatType === 'supergroup' || chatType === 'channel';
+  const { data: members } = useQuery({
+    queryKey: ['chat', chatId, 'members'],
+    queryFn: () => chatsApi.members(chatId),
+    enabled: isGroupLike,
+  });
+  const myRole = members?.find((m) => m.user_id === meId)?.role;
+  const canPin = isGroupLike
+    ? myRole === 'creator' || myRole === 'admin'
+    : false; // в private/saved пин недоступен вообще
 
   // Подписка на WS события — мутируем кэш query
   useEffect(() => {
@@ -154,7 +169,11 @@ export function MessageList({ chatId, chatType }: Props) {
           return (
             <div key={m.id}>
               {showDay && <DaySeparator iso={m.created_at} />}
-              <MessageBubble message={m} grouped={!!groupedWithPrev} chatType={chatType} />
+              {chatType === 'channel' ? (
+                <ChannelPost message={m} chatType={chatType} canPin={canPin} />
+              ) : (
+                <MessageBubble message={m} grouped={!!groupedWithPrev} chatType={chatType} canPin={canPin} />
+              )}
             </div>
           );
         })}

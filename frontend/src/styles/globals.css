@@ -90,18 +90,22 @@ button,
   }
 }
 
-/* Safe area helpers */
+/* Safe area helpers — гарантируют минимальный отступ + env(safe-area-inset-*) */
 .pt-safe {
-  padding-top: var(--safe-top);
+  padding-top: max(env(safe-area-inset-top, 0px), 0.5rem);
 }
 .pb-safe {
-  padding-bottom: var(--safe-bottom);
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 0.75rem);
 }
 .pl-safe {
-  padding-left: var(--safe-left);
+  padding-left: env(safe-area-inset-left, 0px);
 }
 .pr-safe {
-  padding-right: var(--safe-right);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+.py-safe {
+  padding-top: max(env(safe-area-inset-top, 0px), 0.5rem);
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 0.75rem);
 }
 
 .h-dvh {

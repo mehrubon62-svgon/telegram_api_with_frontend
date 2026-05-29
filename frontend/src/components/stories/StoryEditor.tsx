@@ -1,4 +1,4 @@
-import { Image as ImageIcon, X, Upload, Lock, Users, UsersRound, Globe, Pin } from 'lucide-react';
+import { Image as ImageIcon, X, Upload, Users, UsersRound, Globe, Pin } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { StoryPrivacy } from '@/api/types';
@@ -167,9 +167,9 @@ export function StoryEditor({ onClose }: Props) {
           </div>
         )}
 
-        {!file && privacy === 'nobody' && (
+        {!file && (
           <div className="px-4 py-2 text-xs text-white/50">
-            <Lock className="inline h-3.5 w-3.5" /> private
+            Pick a file to start
           </div>
         )}
       </div>

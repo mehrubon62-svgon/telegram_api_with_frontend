@@ -3,8 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import type { StoryFeedItem } from '@/api/types';
-import { mediaUrl } from '@/lib/url';
+import type { StoryFeedItem } from '@/api/types';import { mediaUrl } from '@/lib/url';
 import { storiesApi } from '@/api/endpoints';
 import { useAuthStore } from '@/store/auth';
 import { toast } from '@/components/ui/Toaster';
@@ -37,11 +36,28 @@ export function StoryViewer({ authors, startIndex, onClose }: Props) {
   const currentStory = currentAuthor?.stories[storyIdx];
   const isOwn = me?.id === currentAuthor?.author.id;
 
-  // Авто-mark viewed
+  // Авто-mark viewed (включая собственные — для UI «прочитано»)
   useEffect(() => {
     if (!currentStory) return;
-    storiesApi.get(currentStory.id).catch(() => {});
-  }, [currentStory?.id]);
+    const sid = currentStory.id;
+    queryClient.setQueryData<StoryFeedItem[]>(['stories', 'feed'], (old) => {
+      if (!old) return old;
+      return old.map((item) => {
+        const idx = item.stories.findIndex((s) => s.id === sid);
+        if (idx === -1) return item;
+        const stories = item.stories.slice();
+        const story = stories[idx]!;
+        stories[idx] = { ...story, is_viewed: true };
+        return {
+          ...item,
+          stories,
+          has_unviewed: stories.some((s) => !s.is_viewed),
+        };
+      });
+    });
+    // Сервер запишет просмотр (для своих и чужих) — нужен для персистенции после F5
+    storiesApi.get(sid).catch(() => {});
+  }, [currentStory?.id, queryClient]);
 
   // Прогресс
   useEffect(() => {
@@ -158,7 +174,7 @@ export function StoryViewer({ authors, startIndex, onClose }: Props) {
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative flex h-full max-h-[100dvh] w-full max-w-[420px] flex-col"
+        className="relative flex h-dvh w-full max-w-[420px] flex-col overflow-hidden"
       >
         {/* Прогресс */}
         <div className="flex gap-1 px-3 pt-3 pt-safe">
@@ -207,7 +223,7 @@ export function StoryViewer({ authors, startIndex, onClose }: Props) {
 
         {/* Медиа */}
         <div
-          className="relative flex flex-1 items-center justify-center"
+          className="relative flex min-h-0 flex-1 items-center justify-center"
           onPointerDown={() => setPaused(true)}
           onPointerUp={() => setPaused(false)}
           onPointerCancel={() => setPaused(false)}
@@ -260,7 +276,7 @@ export function StoryViewer({ authors, startIndex, onClose }: Props) {
         {isOwn ? (
           <ViewersFooter storyId={currentStory.id} viewsCount={currentStory.views_count} />
         ) : (
-          <div className="space-y-2 px-3 py-3 pb-safe">
+          <div className="shrink-0 space-y-2 bg-black/85 px-3 pb-4 pt-3 pb-safe backdrop-blur">
             <div className="flex justify-center gap-2">
               {QUICK_REACTIONS.map((e) => (
                 <button
@@ -336,7 +352,7 @@ export function StoryViewer({ authors, startIndex, onClose }: Props) {
 function ViewersFooter({ storyId, viewsCount }: { storyId: number; viewsCount: number }) {
   const [show, setShow] = useState(false);
   return (
-    <div className="px-4 py-3 pb-safe">
+    <div className="shrink-0 bg-black/85 px-4 pb-4 pt-3 pb-safe backdrop-blur">
       <button
         type="button"
         onClick={() => setShow((v) => !v)}

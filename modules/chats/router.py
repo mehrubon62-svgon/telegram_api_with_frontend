@@ -28,6 +28,7 @@ from dependencies import get_current_user
 from modules.users.crud import get_user_by_id
 
 from modules.chats import crud
+from modules.websockets.events import send_to_user_sync
 from modules.chats.schemas import (
     ChatOut,
     ChatPermissions,
@@ -839,6 +840,10 @@ def update_chat_mute(
         sound=data.sound,
     )
     db.commit()
+    send_to_user_sync(user.id, 'chat_state', {
+        'chat_id': chat_id,
+        'is_muted': bool(data.is_muted),
+    })
     return {"detail": "Mute updated"}
 
 
@@ -852,6 +857,10 @@ def update_chat_pinned_in_list(
     _ensure_member(chat_id, user.id, db)
     crud.set_pinned(db, user.id, chat_id, data.is_pinned)
     db.commit()
+    send_to_user_sync(user.id, 'chat_state', {
+        'chat_id': chat_id,
+        'is_pinned': bool(data.is_pinned),
+    })
     return {"detail": "Updated"}
 
 
@@ -865,6 +874,10 @@ def update_chat_archived(
     _ensure_member(chat_id, user.id, db)
     crud.set_archived(db, user.id, chat_id, data.is_archived)
     db.commit()
+    send_to_user_sync(user.id, 'chat_state', {
+        'chat_id': chat_id,
+        'is_archived': bool(data.is_archived),
+    })
     return {"detail": "Updated"}
 
 
