@@ -45,6 +45,7 @@ export interface UserPublic {
   is_online: boolean;
   last_seen: string;
   name_color: number;
+  birthday?: string | null;
 }
 
 export interface UserMe extends UserPublic {
@@ -55,6 +56,20 @@ export interface UserMe extends UserPublic {
   role: Role;
   is_active: boolean;
   created_at: string;
+}
+
+export interface CommonGroupOut {
+  id: number;
+  title: string | null;
+  public_username: string | null;
+  avatar_url: string | null;
+  members_count: number;
+}
+
+export interface UserProfileOut extends UserPublic {
+  is_contact: boolean;
+  is_blocked: boolean;
+  common_chats: CommonGroupOut[];
 }
 export interface SessionOut {
   id: number;

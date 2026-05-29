@@ -61,6 +61,7 @@ class UserPublic(BaseModel):
     is_online: bool
     last_seen: datetime
     name_color: int = 0
+    birthday: datetime | None = None
 
     class Config:
         from_attributes = True
@@ -85,6 +86,23 @@ class UserUpdate(BaseModel):
     language_code: str | None = Field(default=None, max_length=8)
     theme: str | None = None
     name_color: int | None = Field(default=None, ge=0, le=12)
+    birthday: datetime | None = None
+
+
+# ---- Public profile (расширенный) ----
+
+class CommonGroupOut(BaseModel):
+    id: int
+    title: str | None = None
+    public_username: str | None = None
+    avatar_url: str | None = None
+    members_count: int
+
+
+class UserProfileOut(UserPublic):
+    is_contact: bool = False
+    is_blocked: bool = False
+    common_chats: list[CommonGroupOut] = Field(default_factory=list)
 
 
 # ---- Sessions ----

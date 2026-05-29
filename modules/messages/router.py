@@ -522,7 +522,9 @@ def pin_message_endpoint(
         raise HTTPException(status_code=404, detail="Chat not found")
     member = _ensure_member(chat_id, user.id, db)
 
-    if not chats_crud.can_admin(member) and not chat.can_pin_messages:
+    # Пинить может только создатель/админ (или участник с явным правом can_pin_messages).
+    # Обычные участники — нет, даже если у чата выставлен дефолт can_pin_messages.
+    if not chats_crud.can_admin(member):
         rights = chats_crud.get_admin_rights(db, chat.id, user.id)
         if not (rights and rights.can_pin_messages):
             raise HTTPException(status_code=403, detail="Cannot pin messages")

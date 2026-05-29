@@ -36,6 +36,8 @@ from modules.users.schemas import (
     TwoFactorEnable,
     TwoFactorVerify,
     UsernameHistoryOut,
+    UserProfileOut,
+    CommonGroupOut,
 )
 from modules.users.crud import (
     get_user_by_id,
@@ -243,6 +245,11 @@ def edit_me(
         if existing and existing.id != user.id:
             raise HTTPException(status_code=400, detail="Phone already in use")
 
+    # Дату рождения можно задать только один раз — потом менять нельзя
+    if "birthday" in fields and fields["birthday"] is not None:
+        if user.birthday is not None:
+            raise HTTPException(status_code=400, detail="Birthday can only be set once")
+
     return update_user(db, user, **fields)
 
 
@@ -376,3 +383,80 @@ def get_user(
     if not user or not user.is_active:
         raise HTTPException(status_code=404, detail="User not found")
     return user
+
+
+@router.get("/{user_id}/profile", response_model=UserProfileOut)
+def get_user_profile(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    user = get_user_by_id(db, user_id)
+    if not user or not user.is_active:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    from models import Contact, Block, ChatMember, Chat, ChatType, ChatMemberRole
+
+    is_contact = (
+        db.query(Contact)
+        .filter(Contact.owner_id == current.id, Contact.contact_id == user_id)
+        .first()
+        is not None
+    )
+    is_blocked = (
+        db.query(Block)
+        .filter(Block.blocker_id == current.id, Block.blocked_id == user_id)
+        .first()
+        is not None
+    )
+
+    # Общие группы/каналы: чаты, где оба активные участники, тип group/supergroup/channel
+    my_chats = (
+        db.query(ChatMember.chat_id)
+        .filter(
+            ChatMember.user_id == current.id,
+            ChatMember.role.notin_([ChatMemberRole.left, ChatMemberRole.banned]),
+        )
+    )
+    their_chats = (
+        db.query(ChatMember.chat_id)
+        .filter(
+            ChatMember.user_id == user_id,
+            ChatMember.role.notin_([ChatMemberRole.left, ChatMemberRole.banned]),
+        )
+    )
+    common = (
+        db.query(Chat)
+        .filter(
+            Chat.id.in_(my_chats),
+            Chat.id.in_(their_chats),
+            Chat.type.in_([ChatType.group, ChatType.supergroup, ChatType.channel]),
+        )
+        .all()
+    )
+
+    return UserProfileOut(
+        id=user.id,
+        username=user.username,
+        full_name=user.full_name,
+        avatar_url=user.avatar_url,
+        bio=user.bio,
+        is_verified=user.is_verified,
+        is_bot=user.is_bot,
+        is_online=user.is_online,
+        last_seen=user.last_seen,
+        name_color=user.name_color,
+        birthday=user.birthday,
+        is_contact=is_contact,
+        is_blocked=is_blocked,
+        common_chats=[
+            CommonGroupOut(
+                id=c.id,
+                title=c.title,
+                public_username=c.public_username,
+                avatar_url=c.avatar_url,
+                members_count=c.members_count or 0,
+            )
+            for c in common
+        ],
+    )

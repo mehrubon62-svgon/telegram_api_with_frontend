@@ -54,6 +54,8 @@ export const authApi = {
     api.post('/users/me/2fa/disable', body).then((r) => r.data),
   searchUsers: (q: string) => api.get<UserPublic[]>('/users/search', { params: { q } }).then((r) => r.data),
   getUser: (id: number) => api.get<UserPublic>(`/users/${id}`).then((r) => r.data),
+  getProfile: (id: number) =>
+    api.get<import('./types').UserProfileOut>(`/users/${id}/profile`).then((r) => r.data),
   getUserByUsername: (username: string) =>
     api.get<UserPublic>(`/users/by-username/${encodeURIComponent(username)}`).then((r) => r.data),
 };
