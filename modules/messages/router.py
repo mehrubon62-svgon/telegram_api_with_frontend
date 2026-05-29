@@ -159,7 +159,13 @@ def _serialize_attachment(a: Attachment) -> AttachmentOut:
     )
 
 
-def _serialize_message(msg: Message, *, attachments: list[Attachment], sender: User | None) -> MessageOut:
+def _serialize_message(
+    msg: Message,
+    *,
+    attachments: list[Attachment],
+    sender: User | None,
+    reactions: list[ReactionEntry] | None = None,
+) -> MessageOut:
     forward = None
     if msg.forward_from_message_id or msg.forward_from_user_id or msg.forward_from_chat_id:
         forward = ForwardOriginOut(
@@ -198,6 +204,7 @@ def _serialize_message(msg: Message, *, attachments: list[Attachment], sender: U
         original_language=msg.original_language,
         reply_markup=msg.reply_markup,
         attachments=[_serialize_attachment(a) for a in attachments],
+        reactions=reactions or [],
         created_at=msg.created_at,
         edited_at=msg.edited_at,
     )
@@ -210,8 +217,30 @@ def _serialize_messages(db: Session, msgs: list[Message]) -> list[MessageOut]:
     atts_map = crud.get_attachments(db, msg_ids)
     sender_ids = {m.sender_id for m in msgs if m.sender_id}
     senders = {u.id: u for u in db.query(User).filter(User.id.in_(sender_ids)).all()} if sender_ids else {}
+
+    # реакции одним запросом
+    from models import MessageReaction as _MR
+    rxn_rows = (
+        db.query(_MR).filter(_MR.message_id.in_(msg_ids)).all()
+        if msg_ids else []
+    )
+    by_msg: dict[int, dict[str, list[int]]] = {}
+    for r in rxn_rows:
+        by_msg.setdefault(r.message_id, {}).setdefault(r.emoji, []).append(r.user_id)
+    reactions_map: dict[int, list[ReactionEntry]] = {}
+    for mid, by_emoji in by_msg.items():
+        reactions_map[mid] = [
+            ReactionEntry(emoji=e, count=len(uids), chosen=False, user_ids=uids)
+            for e, uids in by_emoji.items()
+        ]
+
     return [
-        _serialize_message(m, attachments=atts_map.get(m.id, []), sender=senders.get(m.sender_id))
+        _serialize_message(
+            m,
+            attachments=atts_map.get(m.id, []),
+            sender=senders.get(m.sender_id),
+            reactions=reactions_map.get(m.id, []),
+        )
         for m in msgs
     ]
 

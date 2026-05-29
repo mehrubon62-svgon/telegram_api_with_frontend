@@ -186,6 +186,8 @@ def create_group_chat(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    if crud.get_chat_by_username(db, data.public_username):
+        raise HTTPException(status_code=400, detail="Username already taken")
     chat = crud.create_group(
         db,
         creator_id=user.id,
@@ -194,6 +196,7 @@ def create_group_chat(
         member_ids=data.member_ids,
         is_supergroup=data.is_supergroup,
         is_forum=data.is_forum,
+        public_username=data.public_username,
     )
     return _serialize_chat(chat)
 
@@ -229,8 +232,55 @@ def my_chats(
     user: User = Depends(get_current_user),
 ):
     rows = crud.list_user_chats(db, user.id, archived=archived, limit=limit, offset=offset)
+
+    # Соберём last_message в одном запросе
+    from models import Message as _Msg, User as _U
+    chat_to_last_id: dict[int, int] = {c.id: c.last_message_id for c, _m in rows if c.last_message_id}
+    last_messages: dict[int, _Msg] = {}
+    if chat_to_last_id:
+        msgs = (
+            db.query(_Msg)
+            .filter(_Msg.id.in_(list(chat_to_last_id.values())))
+            .all()
+        )
+        last_messages = {m.id: m for m in msgs}
+        # подгрузим отправителей
+        sender_ids = {m.sender_id for m in last_messages.values() if m.sender_id}
+        senders = (
+            {u.id: u for u in db.query(_U).filter(_U.id.in_(sender_ids)).all()}
+            if sender_ids else {}
+        )
+    else:
+        senders = {}
+
     result = []
     for chat, member in rows:
+        last_msg_dict = None
+        last_id = chat.last_message_id
+        if last_id and last_id in last_messages:
+            m = last_messages[last_id]
+            sender = senders.get(m.sender_id) if m.sender_id else None
+            preview = m.text or ""
+            if not preview and m.type:
+                # системные превью
+                kind = m.type.value if hasattr(m.type, "value") else str(m.type)
+                preview_map = {
+                    "photo": "Photo", "video": "Video", "video_note": "Video message",
+                    "voice": "Voice message", "audio": "Audio", "file": "File",
+                    "animation": "GIF", "location": "Location", "contact": "Contact",
+                    "poll": "Poll", "call": "Call", "story_reply": "Story reply",
+                    "system": "System message",
+                }
+                preview = preview_map.get(kind, "")
+            last_msg_dict = {
+                "id": m.id,
+                "type": m.type.value if hasattr(m.type, "value") else str(m.type),
+                "text": preview,
+                "sender_id": m.sender_id,
+                "sender_username": sender.username if sender else None,
+                "created_at": m.created_at.isoformat() if m.created_at else None,
+                "is_deleted": bool(m.is_deleted),
+            }
         result.append(ChatListItem(
             chat=_serialize_chat(chat),
             is_pinned=member.is_pinned,
@@ -239,8 +289,27 @@ def my_chats(
             unread_count=member.unread_count or 0,
             unread_mentions_count=member.unread_mentions_count or 0,
             last_read_message_id=member.last_read_message_id,
+            last_message=last_msg_dict,
         ))
     return result
+
+
+@router.get("/search", response_model=list[ChatOut])
+def search_public_chats(
+    q: str = Query(..., min_length=1, max_length=50),
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    """Поиск групп и каналов по public_username (без @)."""
+    pat = f"%{q.lstrip('@').lower()}%"
+    items = (
+        db.query(Chat)
+        .filter(Chat.public_username.ilike(pat))
+        .order_by(Chat.public_username.asc())
+        .limit(20)
+        .all()
+    )
+    return [_serialize_chat(c) for c in items]
 
 
 @router.get("/{chat_id}", response_model=ChatOut)

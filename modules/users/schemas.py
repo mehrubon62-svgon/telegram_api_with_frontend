@@ -60,6 +60,7 @@ class UserPublic(BaseModel):
     is_bot: bool
     is_online: bool
     last_seen: datetime
+    name_color: int = 0
 
     class Config:
         from_attributes = True
@@ -83,6 +84,7 @@ class UserUpdate(BaseModel):
     phone: str | None = Field(default=None, max_length=20)
     language_code: str | None = Field(default=None, max_length=8)
     theme: str | None = None
+    name_color: int | None = Field(default=None, ge=0, le=12)
 
 
 # ---- Sessions ----

@@ -1,0 +1,145 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: 255 255 255;
+  --bg2: 244 244 245;
+  --bg3: 235 237 240;
+  --text: 0 0 0;
+  --muted: 112 117 121;
+  --accent: 51 144 236;
+  --accent-hover: 38 124 211;
+  --own: 224 247 255;
+  --own-text: 0 0 0;
+  --line: 222 224 226;
+  --danger: 226 53 53;
+  /* Чат-фон с лёгкой подложкой как в TG Web */
+  --chat-bg: 244 244 245;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+}
+
+.dark {
+  --bg: 23 33 43;
+  --bg2: 32 43 54;
+  --bg3: 42 53 64;
+  --text: 255 255 255;
+  --muted: 144 156 168;
+  --accent: 81 168 244;
+  --accent-hover: 99 178 248;
+  --own: 56 95 137;
+  --own-text: 255 255 255;
+  --line: 47 60 73;
+  --danger: 245 84 84;
+  --chat-bg: 14 22 33;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+body {
+  background: rgb(var(--bg));
+  color: rgb(var(--text));
+  font-family: theme('fontFamily.sans');
+  overscroll-behavior: none;
+}
+
+button,
+[role='button'] {
+  touch-action: manipulation;
+}
+
+/* Кастомный скроллбар, не уродующий мобильные браузеры */
+.thin-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.thin-scrollbar::-webkit-scrollbar-thumb {
+  background: rgb(var(--muted) / 0.3);
+  border-radius: 3px;
+}
+.thin-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--muted) / 0.5);
+}
+
+/* На мобиле скрываем скроллбары полностью */
+@media (pointer: coarse) {
+  .thin-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* Safe area helpers */
+.pt-safe {
+  padding-top: var(--safe-top);
+}
+.pb-safe {
+  padding-bottom: var(--safe-bottom);
+}
+.pl-safe {
+  padding-left: var(--safe-left);
+}
+.pr-safe {
+  padding-right: var(--safe-right);
+}
+
+.h-dvh {
+  height: 100dvh;
+}
+.min-h-dvh {
+  min-height: 100dvh;
+}
+
+/* Линейка градиента для своих сообщений в тёмной теме (как в TG Web) */
+.bubble-own-gradient {
+  background: linear-gradient(135deg, rgb(123 156 255) 0%, rgb(145 137 240) 100%);
+  color: white;
+}
+
+/* Тонкие линии-разделители */
+.divider {
+  background: rgb(var(--line));
+  height: 1px;
+}
+
+/* Telegram blue links */
+a.tg-link {
+  color: rgb(var(--accent));
+}
+a.tg-link:hover {
+  text-decoration: underline;
+}
+
+/* Скрыть стандартные элементы input clear */
+input::-webkit-search-decoration,
+input::-webkit-search-cancel-button,
+input::-webkit-search-results-button,
+input::-webkit-search-results-decoration {
+  display: none;
+}
+
+
+.bg-chat {
+  background: rgb(var(--chat-bg));
+}

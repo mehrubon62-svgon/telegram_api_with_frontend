@@ -76,12 +76,10 @@ def search_users(db: Session, query: str, limit: int = 20) -> list[User]:
     return (
         db.query(User)
         .filter(
-            or_(
-                User.username.ilike(q),
-                User.full_name.ilike(q),
-            ),
+            User.username.ilike(q),
             User.is_active.is_(True),
         )
+        .order_by(User.username.asc())
         .limit(limit)
         .all()
     )

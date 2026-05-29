@@ -59,6 +59,7 @@ class SenderOut(BaseModel):
     username: str | None = None
     full_name: str | None = None
     avatar_url: str | None = None
+    name_color: int = 0
 
     class Config:
         from_attributes = True
@@ -130,6 +131,7 @@ class MessageOut(BaseModel):
     reply_markup: dict | None = None
 
     attachments: list[AttachmentOut] = Field(default_factory=list)
+    reactions: list["ReactionEntry"] = Field(default_factory=list)
 
     created_at: datetime
     edited_at: datetime | None = None
@@ -249,3 +251,8 @@ class PollOut(BaseModel):
     close_at: datetime | None = None
     total_voters: int
     chosen_option_ids: list[int] = Field(default_factory=list)
+
+
+
+# Forward refs (ReactionEntry в MessageOut определён ниже него)
+MessageOut.model_rebuild()

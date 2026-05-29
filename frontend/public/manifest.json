@@ -1,0 +1,10 @@
+{
+  "name": "Telegramm",
+  "short_name": "Telegramm",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#3390ec",
+  "description": "Telegram-style messenger",
+  "icons": []
+}

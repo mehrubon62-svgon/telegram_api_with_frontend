@@ -156,6 +156,10 @@ class User(Base):
     is_online = Column(Boolean, default=False, nullable=False)
     last_seen = Column(DateTime(timezone=True), default=utcnow, nullable=False)
 
+    # Цвет имени пользователя (как в TG: пользователь выбирает один из палитры).
+    # Хранится индексом из набора COLORS на фронте.
+    name_color = Column(Integer, default=0, nullable=False)
+
     # Профиль (расширение)
     birthday = Column(DateTime(timezone=True), nullable=True)
     personal_channel_id = Column(Integer, ForeignKey("chats.id", ondelete="SET NULL"), nullable=True)

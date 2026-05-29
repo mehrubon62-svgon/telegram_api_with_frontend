@@ -51,6 +51,7 @@ class ChatListItem(BaseModel):
     unread_count: int
     unread_mentions_count: int
     last_read_message_id: int | None = None
+    last_message: dict | None = None
 
 
 # ---- Create ----
@@ -62,6 +63,7 @@ class CreatePrivateChat(BaseModel):
 class CreateGroupChat(BaseModel):
     title: str = Field(min_length=1, max_length=150)
     description: str | None = Field(default=None, max_length=2000)
+    public_username: str = Field(min_length=5, max_length=50, pattern=r"^[a-zA-Z][a-zA-Z0-9_]{4,49}$")
     member_ids: list[int] = Field(default_factory=list, max_length=500)
     is_supergroup: bool = False
     is_forum: bool = False
@@ -70,7 +72,7 @@ class CreateGroupChat(BaseModel):
 class CreateChannel(BaseModel):
     title: str = Field(min_length=1, max_length=150)
     description: str | None = Field(default=None, max_length=2000)
-    public_username: str | None = Field(default=None, min_length=5, max_length=50, pattern=r"^[a-zA-Z][a-zA-Z0-9_]{4,49}$")
+    public_username: str = Field(min_length=5, max_length=50, pattern=r"^[a-zA-Z][a-zA-Z0-9_]{4,49}$")
 
 
 class ChatUpdate(BaseModel):

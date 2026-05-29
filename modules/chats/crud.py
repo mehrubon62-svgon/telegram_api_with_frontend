@@ -279,11 +279,13 @@ def create_group(
     member_ids: list[int],
     is_supergroup: bool = False,
     is_forum: bool = False,
+    public_username: str | None = None,
 ) -> Chat:
     chat = Chat(
         type=ChatType.supergroup if is_supergroup else ChatType.group,
         title=title,
         description=description,
+        public_username=public_username,
         creator_id=creator_id,
         is_forum=is_forum and is_supergroup,
         members_count=0,
