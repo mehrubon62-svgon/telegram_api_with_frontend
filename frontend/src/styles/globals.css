@@ -63,17 +63,31 @@ button,
   touch-action: manipulation;
 }
 
-/* Кастомный скроллбар, не уродующий мобильные браузеры */
+/* Кастомный скроллбар: виден только при наведении/прокрутке */
+.thin-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.thin-scrollbar:hover,
+.thin-scrollbar:focus-within,
+.thin-scrollbar.scrolling {
+  scrollbar-color: rgb(var(--muted) / 0.4) transparent;
+}
 .thin-scrollbar::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 .thin-scrollbar::-webkit-scrollbar-thumb {
-  background: rgb(var(--muted) / 0.3);
-  border-radius: 3px;
+  background: transparent;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+.thin-scrollbar:hover::-webkit-scrollbar-thumb,
+.thin-scrollbar.scrolling::-webkit-scrollbar-thumb {
+  background: rgb(var(--muted) / 0.4);
 }
 .thin-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgb(var(--muted) / 0.5);
+  background: rgb(var(--muted) / 0.6);
 }
 
 /* На мобиле скрываем скроллбары полностью */

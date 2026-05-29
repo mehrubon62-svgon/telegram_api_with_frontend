@@ -27,6 +27,31 @@ class Token(BaseModel):
     token_type: str = "bearer"
 
 
+# ---- Phone auth (OTP) ----
+
+class PhoneRegister(BaseModel):
+    phone: str = Field(min_length=4, max_length=20)
+    full_name: str = Field(min_length=1, max_length=150)
+    username: str = Field(min_length=3, max_length=50, pattern=r"^[a-zA-Z][a-zA-Z0-9_]{2,49}$")
+
+
+class RequestCode(BaseModel):
+    phone: str = Field(min_length=4, max_length=20)
+
+
+class RequestCodeResult(BaseModel):
+    # Код возвращаем прямо в ответе — «для галочки» (demo only)
+    code: str
+    phone: str
+    is_registered: bool
+
+
+class VerifyCode(BaseModel):
+    phone: str
+    code: str
+    device_name: str | None = None
+
+
 class RefreshRequest(BaseModel):
     refresh_token: str
 

@@ -24,6 +24,10 @@ from dependencies import (
 from modules.users.schemas import (
     UserRegister,
     UserLogin,
+    PhoneRegister,
+    RequestCode,
+    RequestCodeResult,
+    VerifyCode,
     Token,
     RefreshRequest,
     PasswordChange,
@@ -101,6 +105,121 @@ def register(data: UserRegister, request: Request, db: Session = Depends(get_db)
         ip_address=meta["ip_address"],
         user_agent=meta["user_agent"],
     )
+    return Token(
+        access_token=create_access_token({"sub": str(user.id), "sid": session.id}),
+        refresh_token=session.refresh_token,
+    )
+
+
+# =====================================================================
+#  Phone auth (OTP) — demo: код возвращается прямо в ответе
+# =====================================================================
+
+@router.post("/auth/register-phone", response_model=Token, status_code=201)
+def register_phone(data: PhoneRegister, request: Request, db: Session = Depends(get_db)):
+    """Регистрация: номер + имя + username. Email генерируем синтетически."""
+    if get_user_by_phone(db, data.phone):
+        raise HTTPException(status_code=400, detail="Phone already registered")
+    if get_user_by_username(db, data.username):
+        raise HTTPException(status_code=400, detail="Username already taken")
+
+    digits = "".join(ch for ch in data.phone if ch.isdigit())
+    email = f"{digits}@tg.local"
+    if get_user_by_email(db, email):
+        raise HTTPException(status_code=400, detail="Phone already registered")
+
+    import secrets as _secrets
+    user = create_user(
+        db,
+        email=email,
+        password=_secrets.token_urlsafe(16),  # пароль не используется при phone-login
+        username=data.username,
+        full_name=data.full_name,
+        phone=data.phone,
+    )
+    meta = get_request_meta(request)
+    session = create_session(db, user.id, ip_address=meta["ip_address"], user_agent=meta["user_agent"])
+    return Token(
+        access_token=create_access_token({"sub": str(user.id), "sid": session.id}),
+        refresh_token=session.refresh_token,
+    )
+
+
+@router.post("/auth/request-code", response_model=RequestCodeResult)
+def request_code(data: RequestCode, db: Session = Depends(get_db)):
+    """
+    Запрос кода входа по номеру. Возвращает код прямо в ответе (demo).
+    В реале код бы ушёл по SMS.
+    """
+    import random
+    from datetime import datetime, timedelta, timezone
+    from modules.users.crud import hash_password
+    from models import OtpCode, OtpPurpose
+
+    user = get_user_by_phone(db, data.phone)
+    code = f"{random.randint(0, 99999):05d}"
+
+    # инвалидируем старые неиспользованные коды для этого номера
+    db.query(OtpCode).filter(
+        OtpCode.identifier == data.phone,
+        OtpCode.used_at.is_(None),
+    ).update({"used_at": datetime.now(timezone.utc)}, synchronize_session=False)
+
+    otp = OtpCode(
+        user_id=user.id if user else None,
+        identifier=data.phone,
+        code_hash=hash_password(code),
+        purpose=OtpPurpose.login,
+        expires_at=datetime.now(timezone.utc) + timedelta(minutes=10),
+    )
+    db.add(otp)
+    db.commit()
+    return RequestCodeResult(code=code, phone=data.phone, is_registered=user is not None)
+
+
+@router.post("/auth/verify-code", response_model=Token)
+def verify_code(data: VerifyCode, request: Request, db: Session = Depends(get_db)):
+    from datetime import datetime, timezone
+    from models import OtpCode
+
+    otp = (
+        db.query(OtpCode)
+        .filter(OtpCode.identifier == data.phone, OtpCode.used_at.is_(None))
+        .order_by(OtpCode.id.desc())
+        .first()
+    )
+    if not otp:
+        raise HTTPException(status_code=400, detail="No code requested")
+
+    exp = otp.expires_at
+    if exp.tzinfo is None:
+        exp = exp.replace(tzinfo=timezone.utc)
+    if exp < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="Code expired")
+
+    if otp.attempts >= otp.max_attempts:
+        raise HTTPException(status_code=400, detail="Too many attempts")
+
+    if not verify_password(data.code, otp.code_hash):
+        otp.attempts += 1
+        db.commit()
+        raise HTTPException(status_code=400, detail="Invalid code")
+
+    otp.used_at = datetime.now(timezone.utc)
+
+    user = get_user_by_phone(db, data.phone)
+    if not user:
+        db.commit()
+        # Нет аккаунта — клиент должен показать регистрацию
+        raise HTTPException(status_code=404, detail="PHONE_NOT_REGISTERED")
+
+    meta = get_request_meta(request)
+    session = create_session(
+        db, user.id,
+        device_name=data.device_name,
+        ip_address=meta["ip_address"], user_agent=meta["user_agent"],
+    )
+    db.commit()
     return Token(
         access_token=create_access_token({"sub": str(user.id), "sid": session.id}),
         refresh_token=session.refresh_token,

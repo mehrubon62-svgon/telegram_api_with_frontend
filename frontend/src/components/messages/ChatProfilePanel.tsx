@@ -1,4 +1,5 @@
 import { X } from 'lucide-react';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { ChatOut } from '@/api/types';
 import { chatsApi } from '@/api/endpoints';
@@ -63,6 +64,12 @@ function GroupOrChannelInfo({
   members: { user_id: number; username: string | null; avatar_url: string | null; role: string }[] | undefined;
   onClose: () => void;
 }) {
+  const [viewUserId, setViewUserId] = useState<number | null>(null);
+
+  if (viewUserId !== null) {
+    return <UserProfilePanel userId={viewUserId} onClose={() => setViewUserId(null)} />;
+  }
+
   return (
     <div className="flex h-dvh flex-col overflow-hidden">
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-line px-3 pt-safe">
@@ -114,14 +121,20 @@ function GroupOrChannelInfo({
           ) : (
             <ul>
               {members.map((m) => (
-                <li key={m.user_id} className="flex items-center gap-3 px-3 py-2 hover:bg-bg2">
-                  <Avatar src={m.avatar_url} name={m.username ?? '?'} id={m.user_id} size={42} />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium" style={{ color: nameColor(m.user_id) }}>
-                      {m.username ?? `User ${m.user_id}`}
+                <li key={m.user_id}>
+                  <button
+                    type="button"
+                    onClick={() => setViewUserId(m.user_id)}
+                    className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-bg2"
+                  >
+                    <Avatar src={m.avatar_url} name={m.username ?? '?'} id={m.user_id} size={42} />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-medium" style={{ color: nameColor(m.user_id) }}>
+                        {m.username ?? `User ${m.user_id}`}
+                      </div>
+                      {m.role !== 'member' && <div className="text-xs text-muted">{m.role}</div>}
                     </div>
-                    {m.role !== 'member' && <div className="text-xs text-muted">{m.role}</div>}
-                  </div>
+                  </button>
                 </li>
               ))}
             </ul>

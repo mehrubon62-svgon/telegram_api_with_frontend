@@ -13,6 +13,7 @@ import { GlobalSearch } from '@/components/chats/GlobalSearch';
 import { Avatar } from '@/components/ui/Avatar';
 import { useAuthStore } from '@/store/auth';
 import { StoriesBar } from '@/components/stories/StoriesBar';
+import { chatsApi } from '@/api/endpoints';
 
 export function Sidebar({ width = 360 }: { width?: number }) {
   const { isMobile } = useResponsive();
@@ -82,7 +83,17 @@ export function Sidebar({ width = 360 }: { width?: number }) {
           )}
         </div>
         <nav className="flex flex-col py-2">
-          <DrawerItem icon={<Bookmark className="h-5 w-5" />} label="Saved Messages" onClick={() => setDrawerOpen(false)} />
+          <DrawerItem icon={<Bookmark className="h-5 w-5" />} label="Saved Messages" onClick={async () => {
+            setDrawerOpen(false);
+            try {
+              const meId = me?.id;
+              if (!meId) return;
+              const chat = await chatsApi.createPrivate(meId);
+              navigate(`/chat/${chat.id}`);
+            } catch {
+              // ignore
+            }
+          }} />
           <DrawerItem icon={<Phone className="h-5 w-5" />} label="Calls" onClick={() => setDrawerOpen(false)} />
           <DrawerItem
             icon={<SettingsIcon className="h-5 w-5" />}

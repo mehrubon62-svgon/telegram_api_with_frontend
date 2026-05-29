@@ -69,6 +69,8 @@ export function MessageList({ chatId, chatType }: Props) {
             if (!old) return old;
             return old.filter((m) => m.id !== mid);
           });
+          // обновим превью в списке чатов
+          queryClient.invalidateQueries({ queryKey: ['chats'] });
         };
         if (node) {
           import('@/lib/dissolve').then(({ playDissolve }) => {

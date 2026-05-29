@@ -284,6 +284,7 @@ export function MessageBubble({ message, grouped, chatType, canPin }: Props) {
               ['chat', message.chat_id, 'messages'],
               (old) => (old ? old.filter((m) => m.id !== message.id) : old),
             );
+            queryClient.invalidateQueries({ queryKey: ['chats'] });
             messagesApi.remove(message.chat_id, message.id, true).catch(() => {});
             await anim;
           }}

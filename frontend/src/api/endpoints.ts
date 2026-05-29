@@ -22,6 +22,12 @@ import type {
 export const authApi = {
   register: (body: { email: string; password: string; username?: string; full_name?: string; phone?: string }) =>
     api.post<Token>('/users/register', body).then((r) => r.data),
+  registerPhone: (body: { phone: string; full_name: string; username: string }) =>
+    api.post<Token>('/users/auth/register-phone', body).then((r) => r.data),
+  requestCode: (phone: string) =>
+    api.post<{ code: string; phone: string; is_registered: boolean }>('/users/auth/request-code', { phone }).then((r) => r.data),
+  verifyCode: (body: { phone: string; code: string; device_name?: string }) =>
+    api.post<Token>('/users/auth/verify-code', body).then((r) => r.data),
   login: (body: { identifier: string; password: string; device_name?: string }) =>
     api.post<Token>('/users/login', { ...body, platform: 'web' }).then((r) => r.data),
   verify2fa: (body: { identifier: string; password: string; code_password: string }) =>

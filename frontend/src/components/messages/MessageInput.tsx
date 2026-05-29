@@ -9,6 +9,7 @@ import { throttle } from '@/lib/throttle';
 import type { ChatType } from '@/api/types';
 import { useComposerStore } from '@/store/composer';
 import { VoiceRecorder } from '@/components/media/VoiceRecorder';
+import EmojiPicker, { Theme, type EmojiClickData } from 'emoji-picker-react';
 
 interface Props {
   chatId: number;
@@ -18,6 +19,7 @@ interface Props {
 export function MessageInput({ chatId }: Props) {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+  const [emojiOpen, setEmojiOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const photoRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLInputElement>(null);
@@ -234,18 +236,35 @@ export function MessageInput({ chatId }: Props) {
           className="thin-scrollbar max-h-40 min-h-[44px] flex-1 resize-none rounded-2xl bg-bg2 px-4 py-2.5 text-sm outline-none focus:bg-bg3"
         />
 
-        <button
-          type="button"
-          aria-label="Emoji"
-          className="flex h-11 w-11 items-center justify-center rounded-lg text-text hover:bg-bg2"
-          onClick={() => {
-            // быстрый picker: вставляет один из шести
-            const e = window.prompt('Insert emoji', '😀');
-            if (e) setText((t) => t + e);
-          }}
-        >
-          <Smile className="h-5 w-5" />
-        </button>
+        <div className="relative">
+          <button
+            type="button"
+            aria-label="Emoji"
+            className="flex h-11 w-11 items-center justify-center rounded-lg text-text hover:bg-bg2"
+            onClick={() => setEmojiOpen((v) => !v)}
+          >
+            <Smile className="h-5 w-5" />
+          </button>
+          {emojiOpen && (
+            <>
+              <div className="fixed inset-0 z-[140]" onClick={() => setEmojiOpen(false)} />
+              <div className="absolute bottom-12 right-0 z-[141]">
+                <EmojiPicker
+                  onEmojiClick={(emojiData: EmojiClickData) => {
+                    setText((t) => t + emojiData.emoji);
+                    taRef.current?.focus();
+                  }}
+                  theme={(document.documentElement.classList.contains('dark') ? 'dark' : 'light') as Theme}
+                  width={320}
+                  height={400}
+                  lazyLoadEmojis
+                  previewConfig={{ showPreview: false }}
+                  searchPlaceHolder="Search emoji"
+                />
+              </div>
+            </>
+          )}
+        </div>
 
         {!text.trim() && !editing ? (
           <VoiceRecorder chatId={chatId} onDone={() => {}} />
